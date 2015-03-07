@@ -52,6 +52,19 @@ enum player
 };
 
 /*
+ * The state of the game. Technically could be called game_state because
+ * structs and enums are in different namespaces, but that could cause
+ * confusion.
+ */
+enum game_status
+{
+    GAME_IN_PROGRESS,
+    GAME_P1_VICTORY,
+    GAME_P2_VICTORY,
+    GAME_DRAW
+};
+
+/*
  * Some other useful constants.
  */
 #define BOARD_W (7)
@@ -66,13 +79,7 @@ struct game_state
 {
     enum piece board[BOARD_H][BOARD_W];
     enum player current_player;
-    /* enums don't have to be named. The same is true for structs as well. */
-    enum {
-        GAME_IN_PROGRESS,
-        GAME_P1_VICTORY,
-        GAME_P2_VICTORY,
-        GAME_DRAW
-    } status;
+    enum game_status status;
 };
 
 /*
@@ -126,6 +133,97 @@ void state_delete(struct game_state *state)
 {
     /* free checks for NULL pointers, so we don't have to do it manually. */
     free(state);
+}
+
+/*
+ * Returns 1 if the given coordinates are within the board; 0 otherwise.
+ * This could be implemented as a macro (or in C99 as an inline function) for
+ * a little speed boost, but the compiler can probably optimize it anyway.
+ */
+static int valid_coords(int row, int col)
+{
+    return 0 <= row && row < BOARD_H
+        && 0 <= col && col < BOARD_W;
+}
+
+/*
+ * Updates the game status.
+ */
+void state_update_status(struct game_state *state)
+{
+    int row, col;
+    int draw;
+
+    /* If the game is already over, there's nothing to do. */
+    if (state->status != GAME_IN_PROGRESS) {
+        return;
+    }
+
+    /* The game is a draw if every square on the board is full. It's enough to
+     * check the top square of each column. */
+    draw = 1;
+    for (col = 0; col < BOARD_W; ++col) {
+        if (state->board[BOARD_H-1][col] == NO_PIECE) {
+            draw = 0;
+            break;
+        }
+    }
+    if (draw) {
+        state->status = GAME_DRAW;
+        return;
+    }
+
+    /*
+     * Checking for victory is more complicated. Basically, we loop through
+     * every square on the board and then through eight possible directions. If
+     * the first three squares in a direction are on the board and contain the
+     * same piece as the starting square, then we found a winner.
+     *
+     * TODO: Perhaps split this mess into multiple functions.
+     */
+    for (row = 0; row < BOARD_H; ++row) {
+        for (col = 0; col < BOARD_W; ++col) {
+            int dx, dy;
+            enum piece start_piece = state->board[row][col];
+
+            /* Skip empty spaces. */
+            if (!start_piece) {
+                continue;
+            }
+
+            /* Direction is represented with two variables. dy means vertical
+             * movement and dx is horizontal movement. For example,
+             * dy = 1 and dx = 1 is up and to the right. */
+            for (dx = -1; dx <= 1; ++dx) {
+                for (dy = -1; dy <= 1; ++dy) {
+                    int victory, i;
+
+                    /* This is a nonsense direction. */
+                    if (dx == 0 && dy == 0) {
+                        continue;
+                    }
+
+                    /* Assume that the game is over until proven otherwise. */
+                    victory = 1;
+                    for (i = 1; i < 4; ++i) {
+                        if (!valid_coords(row+dy*i, col+dx*i)
+                         || state->board[row+dy*i][col+dx*i] != start_piece) {
+                            victory = 0;
+                            break;
+                        }
+                    }
+
+                    if (victory) {
+                        /* We found a winner! */
+                        state->status = start_piece == P1_PIECE
+                                ? GAME_P1_VICTORY
+                                : GAME_P2_VICTORY;
+                        return;
+                    }
+                }
+            }
+        }
+    }
 }
 
 /*
@@ -209,7 +307,8 @@ struct game_state *state_move(const struct game_state *state, int column)
     new_state->current_player =
             new_state->current_player == PLAYER1 ? PLAYER2 : PLAYER1;
 
-    /* TODO: Check if the game is now over */
+    /* Update the game status. */
+    state_update_status(new_state);
 
     return new_state;
 }
@@ -274,6 +373,29 @@ int main(void)
 
         state_draw(state, stdout);
 
+        /* Check if the game is already over */
+        switch (state->status) {
+            case GAME_IN_PROGRESS:
+            /* Continue the game. */
+            break;
+
+            case GAME_P1_VICTORY:
+            printf("Player 1 won! Congratulations!\n");
+            goto game_over;
+
+            case GAME_P2_VICTORY:
+            printf("Player 2 won! Congratulations!\n");
+            goto game_over;
+
+            case GAME_DRAW:
+            printf("It's a draw!\n");
+            goto game_over;
+
+            default:
+            assert("Invalid game state!" && 0);
+            break;
+        }
+
         /* Allow the player to make a move. */
         column = read_column();
         if (column == -1) {
@@ -288,6 +410,7 @@ int main(void)
         }
     }
 
+game_over:
     state_delete(state);
 
     return 0;
