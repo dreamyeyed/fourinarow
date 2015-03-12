@@ -18,6 +18,7 @@
  */
 
 #include <assert.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -311,6 +312,65 @@ struct game_state *state_move(const struct game_state *state, int column)
     state_update_status(new_state);
 
     return new_state;
+}
+
+/*
+ * Evaluates the game state for player 1. Returns a number in range [-1, 1],
+ * where +1 = P1 victory, -1 = P2 victory and 0 = draw.
+ *
+ * To evaluate the state for player 2, simply use -state_evaluate(state).
+ */
+double state_evaluate(const struct game_state *state)
+{
+    /* These variables will be used later. Unfortunately C89 forces us to
+     * declare them here. */
+    int horizontal_middle = (BOARD_W-1)/2;
+    int vertical_middle = (BOARD_H-1)/2;
+    double max_piece_value = 1.0 / (BOARD_W*BOARD_H/2);
+    double move_value = 0;
+    int row, col;
+
+    switch (state->status) {
+        case GAME_P1_VICTORY:
+        return 1;
+
+        case GAME_P2_VICTORY:
+        return -1;
+
+        case GAME_DRAW:
+        return 0;
+
+        case GAME_IN_PROGRESS:
+        /* continue evaluation */
+        break;
+
+        default:
+        assert("state_evaluate: invalid game state" && 0);
+    }
+
+    /* We'll use a very simple heuristic for testing: the closer a piece is
+     * to the center of the board, the better.  We can always improve it
+     * later. */
+    for (row = 0; row < BOARD_H; ++row) {
+        for (col = 0; col < BOARD_W; ++col) {
+            if (state->board[row][col] != NO_PIECE) {
+                /* Calculate distance from center. */
+                int dy = abs(row - vertical_middle);
+                int dx = abs(row - horizontal_middle);
+                double dist = sqrt(dy*dy + dx*dx);
+
+                if (state->board[row][col] == P1_PIECE) {
+                    move_value += max_piece_value / dist;
+                } else {
+                    move_value -= max_piece_value / dist;
+                }
+            }
+        }
+    }
+
+    assert(-1.0 <= move_value && move_value <= 1.0);
+
+    return move_value;
 }
 
 /*
