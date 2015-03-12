@@ -443,13 +443,16 @@ static int _minimax(const struct game_state *state, eval_fn eval,
     /* Game over? */
     switch (state->status) {
         case GAME_P1_VICTORY:
-        return 1;
+        *score = 1;
+        return -1;
 
         case GAME_P2_VICTORY:
+        *score = -1;
         return -1;
 
         case GAME_DRAW:
-        return 0;
+        *score = 0;
+        return -1;
 
         case GAME_IN_PROGRESS:
         break;
@@ -476,9 +479,11 @@ static int _minimax(const struct game_state *state, eval_fn eval,
         /* Check if this move is better than the best one found so far */
         current_move = _minimax(new_state, eval, &current_score,
                                 max_depth, curr_depth+1);
-        if (state->current_player == PLAYER1 && current_score > best_score) {
-            best_move = col;
-            best_score = current_score;
+        if (state->current_player == PLAYER1) {
+            if (current_score > best_score) {
+                best_move = col;
+                best_score = current_score;
+            }
         } else if (current_score < best_score) {
             best_move = col;
             best_score = current_score;
