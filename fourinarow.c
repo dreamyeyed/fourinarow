@@ -18,6 +18,7 @@
  */
 
 #include <assert.h>
+#include <float.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -356,8 +357,9 @@ double state_evaluate(const struct game_state *state)
             if (state->board[row][col] != NO_PIECE) {
                 /* Calculate distance from center. */
                 int dy = abs(row - vertical_middle);
-                int dx = abs(row - horizontal_middle);
-                double dist = sqrt(dy*dy + dx*dx);
+                int dx = abs(col - horizontal_middle);
+                /* add 1 to ensure dist is never 0 */
+                double dist = sqrt(dy*dy + dx*dx) + 1;
 
                 if (state->board[row][col] == P1_PIECE) {
                     move_value += max_piece_value / dist;
@@ -416,6 +418,90 @@ int read_column(void)
     return -1;
 }
 
+/* typedef for a function that can evaluate a game state. typedefs are very
+ * useful because function pointers can be difficult to read. */
+typedef double (*eval_fn)(const struct game_state *);
+
+/*
+ * Chooses the best move for P2 using the minimax algorithm. Don't call this
+ * function directly.
+ */
+static int _minimax(const struct game_state *state, eval_fn eval,
+                    double *score, int max_depth, int curr_depth)
+{
+    int best_move;
+    double best_score;
+    int col;
+
+    /* Maximum depth reached? Just evaluate the state with the evaluation
+     * function. */
+    if (curr_depth >= max_depth) {
+        *score = eval(state);
+        return -1;
+    }
+
+    /* Game over? */
+    switch (state->status) {
+        case GAME_P1_VICTORY:
+        return 1;
+
+        case GAME_P2_VICTORY:
+        return -1;
+
+        case GAME_DRAW:
+        return 0;
+
+        case GAME_IN_PROGRESS:
+        break;
+
+        default:
+        assert("state_evaluate: invalid game state" && 0);
+    }
+
+    /* Game is still is progress */
+    best_move = -1;
+    /* Remember that low score is good for P2. */
+    best_score = state->current_player == PLAYER1 ? DBL_MIN : DBL_MAX;
+
+    for (col = 0; col < BOARD_W; ++col) {
+        int current_move;
+        double current_score;
+
+        struct game_state *new_state = state_move(state, col);
+        if (!new_state) {
+            /* illegal move */
+            continue;
+        }
+
+        /* Check if this move is better than the best one found so far */
+        current_move = _minimax(new_state, eval, &current_score,
+                                max_depth, curr_depth+1);
+        if (state->current_player == PLAYER1 && current_score > best_score) {
+            best_move = col;
+            best_score = current_score;
+        } else if (current_score < best_score) {
+            best_move = col;
+            best_score = current_score;
+        }
+
+        free(new_state);
+    }
+
+    *score = best_score;
+    return best_move;
+}
+
+/*
+ * Chooses the best move for P2. max_depth is the number of moves in the future
+ * that the algorithm considers.
+ */
+int minimax(const struct game_state *state, eval_fn eval, int max_depth)
+{
+    double score;
+    /* We don't care about the score, just return the move. */
+    return _minimax(state, eval, &score, max_depth, 0);
+}
+
 int main(void)
 {
     struct game_state *state = state_new();
@@ -456,8 +542,13 @@ int main(void)
             break;
         }
 
-        /* Allow the player to make a move. */
-        column = read_column();
+        /* Allow either the player or the AI to make a move */
+        if (state->current_player == PLAYER1) {
+            column = read_column();
+        } else {
+            column = minimax(state, state_evaluate, 6);
+        }
+
         if (column == -1) {
             break;
         }
