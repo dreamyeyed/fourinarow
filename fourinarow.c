@@ -229,40 +229,49 @@ void state_update_status(struct game_state *state)
 }
 
 /*
+ * Draws a single row of the board.
+ */
+static void draw_row(const struct game_state *state, FILE *fp, int row)
+{
+    int col;
+
+    for (col = 0; col < BOARD_W; ++col) {
+        fprintf(fp, "|");
+        switch (state->board[row][col]) {
+            case NO_PIECE:
+            putc(' ', fp);
+            break;
+
+            case P1_PIECE:
+            putc('x', fp);
+            break;
+
+            case P2_PIECE:
+            putc('o', fp);
+            break;
+
+            default:
+            /* This assertion always fails, but produces a useful
+             * message. */
+            assert("invalid piece" && 0);
+        }
+    }
+    fprintf(fp, "|\n");
+}
+
+/*
  * Draws a game state in the given output stream.
  */
 void state_draw(const struct game_state *state, FILE *fp)
 {
     int row, col;
 
-    /* This code is unfortunately quite ugly. */
     for (row = BOARD_H - 1; row >= 0; --row) {
         for (col = 0; col < BOARD_W; ++col) {
             fprintf(fp, "+-");
         }
         fprintf(fp, "+\n");
-        for (col = 0; col < BOARD_W; ++col) {
-            fprintf(fp, "|");
-            switch (state->board[row][col]) {
-                case NO_PIECE:
-                putc(' ', fp);
-                break;
-
-                case P1_PIECE:
-                putc('x', fp);
-                break;
-
-                case P2_PIECE:
-                putc('o', fp);
-                break;
-
-                default:
-                /* This assertion always fails, but produces a useful
-                 * message. */
-                assert("invalid piece" && 0);
-            }
-        }
-        fprintf(fp, "|\n");
+        draw_row(state, fp, row);
     }
     for (col = 0; col < BOARD_W; ++col) {
         fprintf(fp, "+-");
