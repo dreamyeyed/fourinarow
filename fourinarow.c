@@ -553,11 +553,11 @@ int main(void)
             break;
 
             case GAME_P1_VICTORY:
-            printf("Player 1 won! Congratulations!\n");
+            printf("You win! Congratulations!\n");
             goto game_over;
 
             case GAME_P2_VICTORY:
-            printf("Player 2 won! Congratulations!\n");
+            printf("You lost! Too bad...\n");
             goto game_over;
 
             case GAME_DRAW:
