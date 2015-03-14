@@ -432,10 +432,10 @@ int read_column(void)
 typedef double (*eval_fn)(const struct game_state *);
 
 /*
- * Chooses the best move for P2 using the minimax algorithm. Don't call this
- * function directly.
+ * Chooses the best move using the negamax algorithm.
+ * Don't call this function directly.
  */
-static int _minimax(const struct game_state *state, eval_fn eval,
+static int _negamax(const struct game_state *state, eval_fn eval,
                     double *score, int max_depth, int curr_depth)
 {
     int best_move;
@@ -446,17 +446,21 @@ static int _minimax(const struct game_state *state, eval_fn eval,
      * function. */
     if (curr_depth >= max_depth) {
         *score = eval(state);
+        /* eval always assumes player 1 */
+        if (state->current_player == PLAYER2) {
+            *score *= -1;
+        }
         return -1;
     }
 
     /* Game over? */
     switch (state->status) {
         case GAME_P1_VICTORY:
-        *score = 1;
+        *score = (state->current_player == PLAYER1) ? 1 : -1;
         return -1;
 
         case GAME_P2_VICTORY:
-        *score = -1;
+        *score = (state->current_player == PLAYER1) ? -1 : 1;
         return -1;
 
         case GAME_DRAW:
@@ -472,11 +476,11 @@ static int _minimax(const struct game_state *state, eval_fn eval,
 
     /* Game is still is progress */
     best_move = -1;
-    /* Remember that low score is good for P2. */
-    best_score = state->current_player == PLAYER1 ? DBL_MIN : DBL_MAX;
+    /* -1 is the lowest possible score, so we'll initialize best_score to lower
+     * than that. */
+    best_score = -1000;
 
     for (col = 0; col < BOARD_W; ++col) {
-        int current_move;
         double current_score;
 
         struct game_state *new_state = state_move(state, col);
@@ -486,16 +490,11 @@ static int _minimax(const struct game_state *state, eval_fn eval,
         }
 
         /* Check if this move is better than the best one found so far */
-        current_move = _minimax(new_state, eval, &current_score,
-                                max_depth, curr_depth+1);
-        if (state->current_player == PLAYER1) {
-            if (current_score > best_score) {
-                best_move = col;
-                best_score = current_score;
-            }
-        } else if (current_score < best_score) {
-            best_move = col;
+        _negamax(new_state, eval, &current_score, max_depth, curr_depth+1);
+        current_score *= -1;
+        if (current_score > best_score) {
             best_score = current_score;
+            best_move = col;
         }
 
         free(new_state);
@@ -509,11 +508,11 @@ static int _minimax(const struct game_state *state, eval_fn eval,
  * Chooses the best move for P2. max_depth is the number of moves in the future
  * that the algorithm considers.
  */
-int minimax(const struct game_state *state, eval_fn eval, int max_depth)
+int negamax(const struct game_state *state, eval_fn eval, int max_depth)
 {
     double score;
     /* We don't care about the score, just return the move. */
-    return _minimax(state, eval, &score, max_depth, 0);
+    return _negamax(state, eval, &score, max_depth, 0);
 }
 
 int main(void)
@@ -560,7 +559,7 @@ int main(void)
         if (state->current_player == PLAYER1) {
             column = read_column();
         } else {
-            column = minimax(state, state_evaluate, 6);
+            column = negamax(state, state_evaluate, 6);
         }
 
         if (column == -1) {
