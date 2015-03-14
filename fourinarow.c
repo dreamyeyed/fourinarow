@@ -431,12 +431,19 @@ int read_column(void)
  * useful because function pointers can be difficult to read. */
 typedef double (*eval_fn)(const struct game_state *);
 
+/* Returns the larger of two doubles. */
+static double dmax(double a, double b)
+{
+    return a > b ? a : b;
+}
+
 /*
  * Chooses the best move using the negamax algorithm.
  * Don't call this function directly.
  */
 static int _negamax(const struct game_state *state, eval_fn eval,
-                    double *score, int max_depth, int curr_depth)
+                    double *score, int max_depth, int curr_depth,
+                    double alpha, double beta)
 {
     int best_move;
     double best_score;
@@ -490,11 +497,18 @@ static int _negamax(const struct game_state *state, eval_fn eval,
         }
 
         /* Check if this move is better than the best one found so far */
-        _negamax(new_state, eval, &current_score, max_depth, curr_depth+1);
+        _negamax(new_state, eval, &current_score, max_depth, curr_depth+1,
+                 -beta, dmax(alpha, best_score));
         current_score *= -1;
         if (current_score > best_score) {
             best_score = current_score;
             best_move = col;
+
+            /* Our opponent will never allow this move */
+            if (best_score > beta) {
+                free(new_state);
+                break;
+            }
         }
 
         free(new_state);
@@ -512,7 +526,7 @@ int negamax(const struct game_state *state, eval_fn eval, int max_depth)
 {
     double score;
     /* We don't care about the score, just return the move. */
-    return _negamax(state, eval, &score, max_depth, 0);
+    return _negamax(state, eval, &score, max_depth, 0, -1000, 1000);
 }
 
 int main(void)
@@ -559,7 +573,7 @@ int main(void)
         if (state->current_player == PLAYER1) {
             column = read_column();
         } else {
-            column = negamax(state, state_evaluate, 6);
+            column = negamax(state, state_evaluate, 10);
         }
 
         if (column == -1) {
