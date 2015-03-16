@@ -451,34 +451,13 @@ static int _negamax(const struct game_state *state, eval_fn eval,
 
     /* Maximum depth reached? Just evaluate the state with the evaluation
      * function. */
-    if (curr_depth >= max_depth) {
+    if (curr_depth >= max_depth || state->status != GAME_IN_PROGRESS) {
         *score = eval(state);
         /* eval always assumes player 1 */
         if (state->current_player == PLAYER2) {
             *score *= -1;
         }
         return -1;
-    }
-
-    /* Game over? */
-    switch (state->status) {
-        case GAME_P1_VICTORY:
-        *score = (state->current_player == PLAYER1) ? 1 : -1;
-        return -1;
-
-        case GAME_P2_VICTORY:
-        *score = (state->current_player == PLAYER1) ? -1 : 1;
-        return -1;
-
-        case GAME_DRAW:
-        *score = 0;
-        return -1;
-
-        case GAME_IN_PROGRESS:
-        break;
-
-        default:
-        assert("state_evaluate: invalid game state" && 0);
     }
 
     /* Game is still is progress */
